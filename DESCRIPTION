@@ -13,7 +13,8 @@ Description: R wrapper function and GMPL mod file used for solving DEA
     and injects key constraints to modify return-to-scale. See documentation
     for more information and examples.
 Imports:
-  glpkAPI
+  glpkAPI,
+  devtools
 Suggests:
   Benchmarking,
   TFDEA
