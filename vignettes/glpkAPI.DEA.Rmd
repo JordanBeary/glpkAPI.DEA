@@ -1,0 +1,321 @@
+---
+title: "Using R package glpkAPI for Data Envelopment Analysis"
+author: Konrad Miziolek, Jordan Beary, Shreyas Vasanth, Surekha Chanamolu, Rudraxi
+  Mitra
+date: "`r Sys.Date()`"
+output:
+  tufte::tufte_handout:
+    citation_package: natbib
+    latex_engine: xelatex
+  tufte::tufte_html: default
+  tufte::tufte_book:
+    citation_package: natbib
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+# invalidate cache when the tufte version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tufte'))
+options(htmltools.dir.version = FALSE)
+library(knitr)
+library(yaml)
+library(magick)
+library(tufterhandout)
+library(png)
+library(grid)
+library(RCurl)
+library(repmis)
+library(Benchmarking)
+library(TFDEA)
+```
+
+## Purpose: 
+
+To use R package 'glpkAPI' for DEA models which have been programmed in gmpl. This library is optimal for DEA models using .mod files; using glpkAPI for manually building the model and data from scratch is an arduous task better suited for other packages such as Benchmarking. Likewise, editing the model is easier done by editing the .mod file in an editor such as Gusek, or even R, than it is through glpkAPI.   
+
+The wrapper function we have created allows for gmpl DEA models to use the glpkAPI interface to be solved by GLPK. 
+
+However, our wrapper function enables one to input data into an R dataframe for inputs and outputs and calculate the efficiencies and dual weights by modifying the associated .mod and .dat files. 
+
+The .mod files are separate from the data, specified in a .dat format. This decoupling allows for a general-use .mod file for running the same DEA problem with different datasets by specifying the data and permutations of the model (IE input-oriented VRS, input-oriented CRS, etc). The user will specify which permutations are to be used.  
+
+The work done here is primarily a wrapper function written to separate some of the more difficult-to-use glpkAPI functionality from the end-user. The user, when prompted, selects the appropriate configuration of the .mod file to the task (for example, output-oriented CRS), and the data file, as a .dat. The function then loads the required glpkAPI library, and carries forward the model. It allocates the problem and workspace, reads the model file and data file the user selects, builds the problem, and solves it. The function returns primal values, and, if dual = TRUE is selected, also returns dual weights. 
+
+The primal values are formatted as a list of thetas and as a lambda matrix, and duals as a list of duals and a dual matrix. These objects are returned to the user as dataframes. 
+
+## DEA - Brief Review
+
+Data Envelopment Analysis (DEA) is a non-parametric analytical methodology used for efficiency analysis. The primary elements of DEA are a set of decision making units (DMUs) along with their measured inputs and outputs. In addition to the efficiency value of each Decision-Making Units (DMU), DEA also provides benchmarking information, which can be used to improve the efficiency of the DMU. The DMUs may be different branches of the small large bank or different hospitals or a project.
+
+DEA produces a single comprehensive measure of performance for each of DMUs. The best ratio among all the DMUs is the benchmarking target, which is the most efficient one and it would identify other DMUs that would be rated by comparing the ratio to the best one. The two kinds of information, the efficiency level and the benchmarking information, are inseparable. The efficiency is measured based on the distance between the observed DMU and the reference DMU, which serves as a benchmarking target.
+
+## Writing .mod and .dat files in GMPL 
+
+GNU Mathematical Programming Language or MathProg is the native language of GLPK. GMPL is a flexible language and gives the programmer the ability to write low and high-level math programs. This is simple example to get familiar with GMPL syntax. 
+
+```
+var x1;
+var x2;
+maximize obj: 0.6 * x1 + 0.5 * x2;
+s.t. c1: x1 + 2 * x2 <= 1;
+s.t. c2: 3 * x1 + x2 <= 2;
+solve;
+display x1, x2;
+end;
+```
+
+For more insight into programming with GMPL please refer to Andrew Makhorin's GMPL Introductory Manual^[See Makhorin GMPL manual [PDF](https://www.cs.unb.ca/~bremner/docs/glpk/gmpl.pdf)] as we will only be discussing the specifics of our DEA mod and dat files. 
+
+## .mod file 
+The mod file is written in a way that the user does not need to edit to fit their specific DEA problem. However, if adjustments need to be made it is important you, as a user, understand how this file is structured. The model is comprised of five objects: sets, parameters, variables, constraints, and objectives. 
+
+There are two different kinds of statements in GMPL - declaration and functional. The set statement is written first and sets are always the declaration type. We name the objects of a DEA problem: DMUs, inputs, and outputs. These are symbolic names for the actual field names. For example 'baseball players' are DMUs, 'at bats' are inputs, and 'number of hits' are outputs.
+
+Parameter statements are also always declaration type. In the mod file the parameters are generalized to 'input_data' and 'output_data' inluding the units referenced for each - {dmus,inputs} and {dmus,outputs}. Parameters always include an expression to satisfy. In our model the input and output data must be greater than zero.  
+
+The program follows the parameter statements, which holds the variables, objective function, and set of constraints. Thetas and lambdas are the result variables involved in a DEA problem and they must be declared before the objective function. We have created two versions of the mod file depending on whether the user's specific problem is input-oriented or output-oriented. The constraints subject the objective function to benchmarking between the DMUs and finish with a returns-to-scale (RTS) statement. Our wrapper function injects the correct RTS depending on the users specification in R. 
+
+## .dat file
+Compared to the mod file the dat files are simple to structure. Similar to declaring the sets in the mod file, set statements are the first declaration in a dat file. Currently a number is assigned to each DMU - the number of DMUs in the user data is stated in the set for dmus. For now it is a vector of numbers, but for future work we will be able to use the DMU's natural name.
+
+```{marginfigure, echo = TRUE}
+ set dmus := 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; 
+```
+For inputs and outputs the user must declare the field names included in each set. Continuing with the baseball example - 'atbats' and 'numberofhits' are the input and output sets. We found errors when there was whitespace in the set names. 
+
+```{marginfigure, echo = TRUE}
+set inputs := AvailableTonKm OperatingCost NonflightAssets ;
+```
+
+```{marginfigure, echo = TRUE}
+set outputs := RevenuePassengerKm NonpassengerRevenue ;
+```
+
+The same parameters declared in the mod file are referenced again before each input and output data list. After each parameter is declared then the data can be pasted. We experimented with multiple styles and found that distinct columns do not need to be structured for the file to be read correctly - however for the sake of keep the data organized and easy to read we highly recommend a clean column structure. Reference the .dat files for examples that we know work. 
+
+## Warnings
+
+This function is dependent on glpkAPI continuing to return primal values as a list of thetas and lambda matrix. If that is changed downstream, this function will need to be edited. 
+
+Mod files require a DMU number in each row with the data, while Benchmarking, TFDEA (and possibly other packages) treat those as inputs, causing results to not match. Input data for those libraries with a column for DMU number will work, but outputs with a column for DMU number will not work. 
+
+(
+\begin{marginfigure}
+\includegraphics{./DMU data ex.JPG}
+\caption{wrong DMU format}
+\end{marginfigure}
+)
+
+Above is an example in the dat file of DMU's (player names) that are in their own column before input/output values, which will cause errors in the final output values. 
+
+The architecture of this function will need to be changed once this is built into a package. At the moment, there is only one mod file that is overwritten between uses; for robustness, a local copy of the model should be made to avoid the possibility of corruption of the file. Without this package, it is not possible to write out the file locally. With a package, one could save a new copy of the file in the folder. 
+
+Likewise, if there is a need for future users to type in the data with R, the simplest method we could come up with is typing in the data as a dataframe and writing it out locally. Then, using the readLines function and adding the necessary lines for a .dat file, it can be again written out locally, then passed in to our glpkAPIDEA function. 
+
+Therefore, we suggest not using this function for that purpose. Instead, it is simpler to create the data in a text editor or spreadsheet software (Excel, Google Sheets) and copying the data over into a .dat file. 
+
+# glpkAPI Wrapper Function (glpkAPIDEA).
+
+## glpkAPI arguments: 
+
+1. **Mod_path**, the file path to the mod file
+
+2. **Data_path**, the file path to the data file
+
+3. **Returns To Scale (RTS)**:   One of 
+  
+  * "crs"
+  * "vrs"
+  * "irs" (not tested yet)
+  * "drs" (not tested yet)
+
+Arguments are case-insensitive. 
+More RTS possibilities can be added later without much difficulty. 
+
+4. **Orientation**: Specify whether this is an input or output-oriented model. One of 
+  
+  * "in"
+  * "out" (not tested yet)
+  
+  Arguments are case-insensitive. 
+
+5. **Dual**: Whether to extract the dual weighs (shadow prices).
+
+ Default is FALSE. 
+
+## Required libraries: 
+
+glpkAPI - loading the package via GitHub will prompt you to install if you haven't already. 
+
+## Required inputs:
+
+1. .mod file: one of the input-oriented or output-oriented .mod files. 
+2.  .dat file (included, or made by the user). This file needs to include both inputs and outputs for the DEA analysis. Text files can be saved as .dat, and aside from a bare skeleton set of required text in the file, they are easy to run. 
+
+These files are specified by the user but can also be done with a file.choose() call. 
+
+
+## glpkAPIDEA outputs: 
+
+Currently, the function supports efficiency scores, the lambda matrix, and dual weights. 
+
+
+```{r}
+glpkAPIDEA <- function(Mod_path, Data_path, RTS, Orientation, Dual = FALSE)
+{
+  # Steps:
+  #
+  #   1. Data Handling
+  #
+  #     a. If X and Y are null (data is in a .dat file somewhere)
+  #        User chooses the .dat file
+  #     b. If X and Y are not null (user wants to pass in their dataframe)
+  #        Have the user choose the default .dat file
+  #        Read in the .dat file and replace a string with the data
+  #        Write the data to the default file
+  #
+  #       Note: 1. a. is currently done outside of this wrapper function
+  #             to ensure the data is read in properly.
+  #       Note: 1. b. is not yet supported.
+  #
+  #   2. Model Building
+  #
+  #     a. Read in the .mod file (input vs output mod files)
+  #     b. Check which type of parameter RTS is desired
+  #        Replace the string in .mod file that affects which set of constraints are used
+  #      
+  #   3. Model Running
+  #
+  #     * Create the problem and workspace (see glpkAPI vignette)
+  #     * Load the model
+  #     * Load the data
+  #     * Solve the problem
+  
+  #   4. Results
+  #
+  #     * Check if Dual = TRUE
+  #       * If yes, get dual weights
+  #
+  #     * Get the Primal values
+  #     * Decompose into Thetas and lambda matrix
+  
+  # Step 1
+  # a.
+  # b.
+  
+  # Step 2
+  
+  mod_filepath <- Mod_path #User passes in the mod and .dat filepaths.  
+  data_filepath <- Data_path
+  
+  rts_string <<- toupper(RTS) #provides some robustness against user inputs
+  orientation_string <- toupper(Orientation)
+  
+  ### Returns to Scale strings to replace the "### RTS" character string in our mod file
+  
+  if (rts_string == "CRS")
+  {
+    rts_replace_string <<- "s.t. PI1{td in dmus}: sum{d in dmus} lambda[d,td] >= 0;"
+  }
+  
+  if (rts_string == "VRS")
+  { 
+    rts_replace_string <<- "s.t. PI1{td in dmus}: sum{d in dmus} lambda[d,td] = 1;"
+  }
+  
+  if (rts_string == "DRS")
+  { 
+    rts_replace_string <<- "s.t. PI1{td in dmus}: sum{d in dmus} lambda[d,td] >= 1;"
+  }
+  
+  if (rts_string == "IRS")
+  { 
+    rts_replace_string <<- "s.t. PI1{td in dmus}: sum{d in dmus} lambda[d,td] <= 1;"
+  }
+  
+  
+  # Step 2
+  
+  ### Read in the file 
+  
+  mod_file <- readLines(mod_filepath)
+  mod_file <- gsub(pattern = "### RTS Constraint", replace = rts_replace_string, x = mod_file)
+  writeLines(mod_file, con= mod_filepath)
+  
+  # Step 3.
+  
+  ### Creating the glpkAPI model, as in the glpkAPI vignette.
+  
+  library(glpkAPI)
+  
+  mip <- initProbGLPK()
+  setProbNameGLPK(mip, "DEA Example")
+  dea <- mplAllocWkspGLPK()
+  ### Since the model and data are in separate files, it is necessary
+  ### to read in both.
+  result <- mplReadModelGLPK(dea, mod_filepath, skip=0)
+  mplReadDataGLPK(dea, data_filepath)
+  
+  result <- mplGenerateGLPK(dea)
+  result <- mplBuildProbGLPK(dea, mip)
+  
+  solveSimplexGLPK(mip)
+  mplPostsolveGLPK(dea, mip, GLP_MIP)
+  solution_list <- getColsPrimGLPK(mip)
+  
+  mod_file <- readLines(mod_filepath)
+  
+  mod_file[25] <- "### RTS Constraint" # Based on our file structure, 
+  ### line 25 is where our RTS constraint is.
+  
+  writeLines(mod_file, mod_filepath)
+  
+  # Step 4.
+  
+  # solution list returned by glpkAPI as list where first x elements are DMUs and the
+  # next x^2 elements are  the lambda matrix as a list.
+  # To get the number of DMUs, one needs to solve a simple quadratic equation
+  # of the form x^2 + x = c for the positive root of x. x^2 + x = length of solution, so 
+  # for a = 1, b = 1, -c = length of solution. x = (-b + sqrt (b^2 - (4 *1 * -c) ) / 2a
+  
+  c <- length(solution_list)
+  dmus <- (-1 + sqrt(1 + 4*c))/2  
+  
+  if (Dual == "TRUE")
+  {
+    duals_solution_list <- getColsDualGLPK(mip)
+    
+    duals <- duals_solution_list[1:dmus]
+    duals_mat_list <- round(duals_solution_list[dmus+1:length(duals_solution_list)], 6)
+    
+    duals_list <<- data.frame(c(1:dmus), duals_solution_list)
+    duals_matrix <<- data.frame(matrix(duals_solution_list, nrow = dmus, ncol = dmus))
+  }
+  
+  #first n elements are efficiency scores
+  theta_list <<- solution_list[1:dmus] 
+  
+  #rest next n^2 elements belong to n x n lambda matrix
+  lambda_list <<- round(solution_list[dmus+1:length(solution_list)], 6) 
+  
+  thetas <<- data.frame(c(1:dmus), theta_list)
+  colnames(thetas) <<- c("DMU", "Efficiency")
+  
+  lambdas <<- data.frame(matrix(lambda_list, nrow = dmus, ncol = dmus))
+  colnames(lambdas) <<- 1:dmus
+  rownames(lambdas) <<- 1:dmus
+}
+```
+
+
+## Extensions or future Work
+
+Allow the user to create the data as a data.frame in R, then write it out to a file for glpkAPI. This could be easier when this exists in a package (so the user doesn't need to specify where the files will be written out to). In our opinion, the easiest method of bringing in data is by copying data from a text editor into the appropriate place in a .dat file. 
+
+Adding a parameter to the gmpl file so that the logical expression of which RTS constraint to choose is done in the mod file and not in the wrapper function. 
+
+Currently, the file's RTS is restored to the original after the model file is done running. Because I couldn't get the string-substitution to work on a long string, currently we're replacing the RTS that the model runs with the "### RTS Constraint" used for the next .mod call based on it being in line 25. This is extremely fragile and needs to be fixed. 
+
+Creating a copy of the mod file for each DEA run, so that we're not relying on using and re-using one file which may become corrupted downstream.
+

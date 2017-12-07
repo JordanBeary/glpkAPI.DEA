@@ -1,0 +1,22 @@
+Package: glpkAPI.DEA
+Type: Package
+Title: Data Envelopment Analysis using glpk.API
+Version: 0.1.0
+Authors@R: as.person(c(
+  "Konrad Mizolek <konrad.miz@gmail.com> [aut, cre]",
+  "Jordan Beary <jobeary@pdx.edu> [aut]"
+  ))
+Description: R wrapper function and GMPL mod file used for solving DEA
+    problems. One model file contains the linear program necessary to
+    evaluate relative efficiency across a set of decision making units(DMU)
+    Wrapper reads in GMPL model and data files seperately for ease of use
+    and injects key constraints to modify return-to-scale. See documentation
+    for more information and examples.
+Imports:
+  glpkAPI
+Suggests:
+  Benchmarking,
+  TFDEA
+License: GPL-2
+Encoding: UTF-8
+LazyData: true

@@ -1,0 +1,86 @@
+---
+title: "Testing"
+author: "Jordan Beary"
+date: "December 6, 2017"
+output: html_document
+---
+
+# Reproducible examples 
+
+```{r}
+devtools::install_github("JordanBeary/glpkAPI.DEA")
+```
+
+Benchmarking and TFDEA packages produces the same results as our use of the glpkAPI model. 
+
+## Airline efficiency scores (PDX ETM Data Repository)
+```{r}
+mod_filepath <- 
+data_filepath <-  
+
+glpkAPIDEA(mod_filepath, data_filepath, RTS = "crs", Orientation = "in", Dual = FALSE)
+
+airline_inputs <- 
+airline_outputs <- 
+
+benchmarking_dea <- dea(airline_inputs, airline_outputs, RTS = "crs", ORIENTATION = "in")
+tfdea_dea <- DEA(airline_inputs, airline_outputs, rts = "crs", orientation = "input")
+
+results <- cbind(thetas, benchmarking_dea$eff, tfdea_dea$eff)
+results
+```
+
+
+## Gusek DEA Example
+
+```{r}
+data_filepath <-  #file.choose()
+
+glpkAPIDEA(mod_filepath, data_filepath, RTS = "vrs", Orientation = "in", Dual = FALSE)
+
+dea_inputs <- 
+dea_outputs <-    
+
+benchmarking_dea <- dea(dea_inputs, dea_outputs, RTS = "vrs",  ORIENTATION="in" )
+tfdea_dea <- DEA(dea_inputs, dea_outputs, rts = "vrs", orientation = "input")
+
+results <- cbind(thetas, benchmarking_dea$eff, tfdea_dea$eff)
+results
+```
+
+
+## Baseball DEA Example (from slides by Robert Vanderbei at Princeton, http://orfe.princeton.edu/~rvdb/307/lectures/lec8_show.pdf)
+
+```{r}
+data_filepath <-  #file.choose()
+
+glpkAPIDEA(mod_filepath, data_filepath, RTS = "crs", Orientation = "in", Dual = FALSE)
+
+baseball_inputs <- 
+
+baseball_outputs <- 
+
+benchmarking_dea <- dea(baseball_inputs, baseball_outputs, RTS = "crs", ORIENTATION="in" , DUAL = TRUE)
+tfdea_dea <- DEA(baseball_inputs, baseball_outputs, rts = "crs", orientation = "input")
+
+results <- cbind(thetas, benchmarking_dea$eff, tfdea_dea$eff)
+results
+```
+
+
+## Dr. Anderon's IO DEA Example
+```{r}
+data_filepath <-  
+
+glpkAPIDEA(mod_filepath, data_filepath, RTS = "crs", Orientation = "in", Dual = FALSE)
+
+anderson_inputs <- 
+anderson_outputs <- 
+
+anderson_thetas <- dea(anderson_inputs, anderson_outputs, RTS = "crs", ORIENTATION = "in")
+tfdea_thetas <- DEA(anderson_inputs, anderson_outputs, rts = "crs", orientation = "input")
+
+results <- cbind(thetas, anderson_thetas$eff, tfdea_thetas$eff)
+results
+```
+

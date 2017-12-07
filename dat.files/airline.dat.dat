@@ -1,0 +1,49 @@
+data;
+
+set dmus := 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; 
+set inputs := AvailableTonKm OperatingCost NonflightAssets ;
+set outputs := RevenuePassengerKm NonpassengerRevenue ;
+
+param input_data default 0.0 :
+
+AvailableTonKm OperatingCost NonflightAssets:=
+
+1 5723 3239 2003
+2 5895 4225 4557
+3 24099 9560 6267
+4 13565 7499 3213
+5 5183 1880 783
+6 19080 8032 3272
+7 10884 6730 3934
+8 4603 3457 2360
+9 12097 6779 6474
+10 6587 3341 3581
+11 5654 1878 1916
+12 12559 8098 3310
+13 5728 2481 2254
+14 4715 1792 2485
+15 22793 9874 4145
+;
+
+param output_data default 0.0 :
+
+RevenuePassengerKm NonpassengerRevenue :=
+1 26677 697
+2 33081 539
+3 124055 1266
+4 64734 1563
+5 23604 513
+6 95011 572
+7 0 7688
+8 22112 969
+9 52363 2001
+10 26504 1297
+11 19277 972
+12 41925 3398
+13 27754 982
+14 31332 543
+15 122528 1404
+
+;
+
+end;
