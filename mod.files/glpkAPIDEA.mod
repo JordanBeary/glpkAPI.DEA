@@ -22,7 +22,7 @@ s.t. output_lower_limit{o in outputs, td in dmus}:
 s.t. input_upper_limit{i in inputs, td in dmus}:
     sum{d in dmus} lambda[d,td]*input_data[d,i] <= theta[td]*input_data[td,i];
    # Each DMU's comparator's input (left hand side)  must be at least as small asthe one studied #
-s.t. PI1{td in dmus}: sum{d in dmus} lambda[d,td] >= 0;
+### RTS Constraint
 
 ### SOLVE AND PRINT SOLUTION ###
 
