@@ -1,5 +1,5 @@
 # glpkAPI.DEA
-To use R package 'glpkAPI' for DEA models which have been programmed in gmpl. This library is optimal for DEA models using .mod files; using glpkAPI for manually building the model and data from scratch is an arduous task better suited for other packages such as Benchmarking. Likewise, editing the model is easier done by editing the .mod file in an editor such as Gusek, or even R, than it is through glpkAPI.   
+The purpose of our work was to use the R package 'glpkAPI' for DEA models which have been programmed in gmpl (MathProg). This library is optimal for DEA models using .mod files; using glpkAPI for manually building the model and data from scratch is an arduous task better suited for other packages such as Benchmarking. Likewise, editing the model is easier done by editing the .mod file in an editor such as Gusek, or even R, than it is through glpkAPI.   
 
 The wrapper function we have created allows for gmpl DEA models to use the glpkAPI interface to be solved by GLPK. 
 
